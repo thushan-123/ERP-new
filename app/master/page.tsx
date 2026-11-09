@@ -1,3 +1,5 @@
+// export { default } from "../[id]/master/page";
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -5,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { delete_request, get_data } from "../../apiCall";
+import { delete_request, get_data } from "../apiCall";
 import { toast } from "sonner";
 
 interface UOM {
