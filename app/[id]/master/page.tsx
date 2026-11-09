@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { delete_request, get_data } from "../../apiCall";
 import { toast } from "sonner";
@@ -13,6 +16,12 @@ interface UOM {
   active: boolean
 }
 
+const deleteSchema = z.object({
+  confirmation: z.string().trim().min(1, "Enter the UOM name to confirm deletion"),
+});
+
+type DeleteFormData = z.infer<typeof deleteSchema>;
+
 export default function MasterPage() {
   const [dataList, setDataList] = useState<UOM[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +30,16 @@ export default function MasterPage() {
   const [pendingDelete, setPendingDelete] = useState<UOM | null>(null);
 
   const router = useRouter();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError: setFormError,
+    formState: { errors, isSubmitting },
+  } = useForm<DeleteFormData>({
+    resolver: zodResolver(deleteSchema),
+    defaultValues: { confirmation: "" },
+  });
 
   const nav_create = () => {
     router.push("/create")
@@ -49,6 +68,25 @@ export default function MasterPage() {
     } else {
       toast.error("Could not delete UOM. Please try again.");
     }
+  };
+
+  const confirmDelete = async ({ confirmation }: DeleteFormData) => {
+    if (!pendingDelete) return;
+    if (confirmation !== pendingDelete.uom_name.trim()) {
+      setFormError("confirmation", { message: "The name does not match this UOM." });
+      return;
+    }
+    await deleteUom(pendingDelete.uom_id);
+  };
+
+  const openDeleteDialog = (item: UOM) => {
+    reset({ confirmation: "" });
+    setPendingDelete(item);
+  };
+
+  const closeDeleteDialog = () => {
+    setPendingDelete(null);
+    reset({ confirmation: "" });
   };
 
     const logout = () => {
@@ -134,7 +172,7 @@ export default function MasterPage() {
                     <td className="max-w-sm truncate px-5 py-4 text-slate-500">{item.description ?? "-"}</td>
                     <td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{item.active ? "Active" : "Inactive"}</span></td>
                     <td className="px-5 py-4"><button className="font-semibold text-indigo-600 hover:text-indigo-800" type="button" onClick={() => nav_update(item.uom_id)}>Edit</button></td>
-                    <td className="px-5 py-4"><button className="font-semibold text-rose-600 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={deletingId === item.uom_id} onClick={() => setPendingDelete(item)}>{deletingId === item.uom_id ? "Deleting..." : "Delete"}</button></td>
+                    <td className="px-5 py-4"><button className="font-semibold text-rose-600 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={deletingId === item.uom_id} onClick={() => openDeleteDialog(item)}>{deletingId === item.uom_id ? "Deleting..." : "Delete"}</button></td>
                   </tr>
                 )) : (
                   <tr><td className="px-5 py-12 text-center text-slate-500" colSpan={7}>No UOM records found.</td></tr>
@@ -154,26 +192,38 @@ export default function MasterPage() {
           >
             <h2 className="text-lg font-semibold text-slate-900" id="delete-dialog-title">Delete this UOM?</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Delete “{pendingDelete.uom_name}” (ID: {pendingDelete.uom_id})? This cannot be undone.
+              Delete “{pendingDelete.uom_name}” (ID: {pendingDelete.uom_id})? This cannot be undone. Enter the UOM name to confirm.
             </p>
-            <div className="mt-6 flex justify-end gap-3">
+            <form className="mt-4" onSubmit={handleSubmit(confirmDelete)} noValidate>
+              <label className="block space-y-2 text-sm font-medium text-slate-700">
+                UOM name
+                <input
+                  {...register("confirmation")}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-rose-500 focus:ring-4 focus:ring-rose-100"
+                  aria-invalid={!!errors.confirmation}
+                  aria-describedby={errors.confirmation ? "delete-confirmation-error" : undefined}
+                  autoFocus
+                />
+              </label>
+              {errors.confirmation && <p className="mt-1 text-sm text-rose-600" id="delete-confirmation-error" role="alert">{errors.confirmation.message}</p>}
+              <div className="mt-6 flex justify-end gap-3">
               <button
                 className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-                disabled={deletingId !== null}
-                onClick={() => setPendingDelete(null)}
+                disabled={deletingId !== null || isSubmitting}
+                onClick={closeDeleteDialog}
                 type="button"
               >
                 Cancel
               </button>
               <button
                 className="rounded-lg bg-rose-600 px-4 py-2 font-semibold text-white transition hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60"
-                disabled={deletingId !== null}
-                onClick={() => void deleteUom(pendingDelete.uom_id)}
-                type="button"
+                disabled={deletingId !== null || isSubmitting}
+                type="submit"
               >
-                {deletingId === pendingDelete.uom_id ? "Deleting..." : "Delete UOM"}
+                {deletingId === pendingDelete.uom_id || isSubmitting ? "Deleting..." : "Delete UOM"}
               </button>
-            </div>
+              </div>
+            </form>
           </section>
         </div>
       )}
